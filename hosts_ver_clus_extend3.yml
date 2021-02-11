@@ -1,0 +1,122 @@
+---
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_become: true
+    #ansible_ssh_private_key_file: /tmp/certs/ssh_priv.pem
+    sasl_protocol: scram
+    ssl_enabled: true
+    ssl_custom_certs: true
+    ssl_custom_certs_remote_src: true # set to true if key crt and ca file already on hosts, file paths must still be set
+    confluent_archive_certs: "{{confluent_common_repository_baseurl}}/certs_test.tar"
+    ssl_ca_cert_filepath: "{{ confluent_ssl }}/certs/cert_san.pem" # Can be a bundle of ca certs to be included in truststore
+    ssl_signed_cert_filepath: "{{ confluent_ssl }}/certs/cert_san.pem" # Can be a full chain of certs
+    ssl_key_filepath: "{{ confluent_ssl }}/certs/cert_san.key"
+    ssl_key_password: Temporal123.
+    jmxexporter_enabled: true
+  environment:
+    PATH: '/opt/jdk/jdk-11.0.4/bin:{{ ansible_env.PATH }}'
+zookeeper:
+  hosts:
+    192.168.8.181:
+    192.168.8.182:
+    192.168.8.183:
+kafka_broker:
+  kafka_broker:
+   datadir:
+     - /opt/confluent/kafka/my-data
+  vars:
+    kafka_broker_custom_properties:
+      replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
+  hosts:
+    192.168.8.181:
+      broker_id: 1
+      broker.rack: lynx-poz
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: 192.168.8.187
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: 192.168.8.181
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: 192.168.8.181
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+    192.168.8.182:
+      broker_id: 2
+      broker.rack: lynx-poz
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: 192.168.8.188
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: 192.168.8.182
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: 192.168.8.182
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+    192.168.8.183:
+      broker_id: 3
+      broker.rack: lynx-poz
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: 192.168.8.189
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: 192.168.8.183
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: 192.168.8.183
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+schema_registry:
+  hosts:
+    192.168.8.184:
+kafka_rest:
+  hosts:
+    192.168.8.184:
+ksql:
+  hosts:
+    192.168.8.184:
+kafka_connect:
+  hosts:
+    192.168.8.184:
+control_center:
+  hosts:
+    192.168.8.184:
