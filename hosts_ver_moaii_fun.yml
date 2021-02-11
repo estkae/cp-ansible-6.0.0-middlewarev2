@@ -1,0 +1,65 @@
+---
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_become: true
+    #ansible_ssh_private_key_file: /tmp/certs/ssh_priv.pem
+    zookeeper_sasl_protocol: digest
+    sasl_protocol: scram
+    ssl_enabled: true
+    ssl_custom_certs: true
+    ssl_custom_certs_remote_src: true # set to true if key crt and ca file already on hosts, file paths must still be set
+    #confluent_archive_certs: "{{confluent_common_repository_baseurl}}/certs_test.tar"
+    confluent_ssl: '/opt/confluent/ssl'
+    jmxexporter_enabled: true
+  environment:
+    PATH: '/opt/jdk/jdk-11.0.4/bin:{{ ansible_env.PATH }}'
+zookeeper:
+  hosts:
+    ef1zkpmoaii01v.epi.securitasdirect.local:
+kafka_broker:
+  kafka_broker:
+   datadir:
+     - /opt/confluent/kafka/my-data
+  vars:
+    kafka_broker_custom_properties:
+      replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
+  hosts:
+    ef1brkmoaii01v.epi.securitasdirect.local:
+      broker_id: 1
+      broker.rack: rack-pozuelo
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: ef1brkmoaii01v-icnw.epi.securitasdirect.local
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: ef1brkmoaii01v.epi.securitasdirect.local
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: ef1brkmoaii01v.epi.securitasdirect.local
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+schema_registry:
+  hosts:
+    ef1regmoaii01v.epi.securitasdirect.local:
+ksql:
+  hosts:
+    ef1ksqlmoaii01v.epi.securitasdirect.local:
+kafka_connect:
+  hosts:
+    ef1conmoaii01v.epi.securitasdirect.local:
+control_center:
+  hosts:
+    ef1ctlmoaii01v.epi.securitasdirect.local:

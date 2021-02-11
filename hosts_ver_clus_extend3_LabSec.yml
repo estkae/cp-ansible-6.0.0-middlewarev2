@@ -1,0 +1,124 @@
+---
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_become: true
+    #ansible_ssh_private_key_file: /tmp/certs/ssh_priv.pem
+    zookeeper_sasl_protocol: digest
+    sasl_protocol: scram
+    ssl_enabled: true
+    ssl_custom_certs: true
+    ssl_custom_certs_remote_src: true # set to true if key crt and ca file already on hosts, file paths must still be set
+    confluent_archive_certs: "{{confluent_common_repository_baseurl}}/certs_test.tar"
+    confluent_ssl: '/opt/confluent/ssl'
+    ssl_ca_cert_filepath: "/root/cert_icnw/cert_san.pem" # Can be a bundle of ca certs to be included in truststore
+    ssl_signed_cert_filepath: "/root/cert_icnw/cert_san.pem" # Can be a full chain of certs
+    ssl_key_filepath: "/root/cert_icnw/cert_san.key"
+    ssl_key_password: Temporal123.
+    jmxexporter_enabled: true
+  environment:
+    PATH: '/opt/jdk/jdk-11.0.4/bin:{{ ansible_env.PATH }}'
+zookeeper:
+  hosts:
+    ed1brklabmid01v:
+    ed1brklabmid02v:
+    ed1brklabmid03v:
+kafka_broker:
+  kafka_broker:
+   datadir:
+     - /opt/confluent/kafka/my-data
+  vars:
+    kafka_broker_custom_properties:
+      replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
+  hosts:
+    ed1brklabmid01v:
+      broker_id: 1
+      broker.rack: rack-pozuelo
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: ed1brklabmid01v-icnw
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: ed1brklabmid01v
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: ed1brklabmid01v
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+    ed1brklabmid02v:
+      broker_id: 2
+      broker.rack: rack-pozuelo
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: ed1brklabmid02v-icnw
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: ed1brklabmid02v
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: ed1brklabmid02v
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+    ed1brklabmid03v:
+      broker_id: 3
+      broker.rack: rack-pozuelo
+      kafka_broker_custom_listeners:
+             broker:
+               hostname: ed1brklabmid03v-icnw
+               name: BROKER
+               port: 9091
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: none
+             internal:
+               hostname: ed1brklabmid03v
+               name: INTERNAL
+               port: 9092
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+             client:
+               hostname: ed1brklabmid03v
+               name: CLIENT
+               port: 9093
+               ssl_enabled: true
+               ssl_mutual_auth_enabled: false
+               sasl_protocol: scram
+schema_registry:
+  hosts:
+    ed1ctllabmid01v:
+kafka_rest:
+  hosts:
+    ed1ctllabmid02v:
+ksql:
+  hosts:
+    ed1ctllabmid02v:
+kafka_connect:
+  hosts:
+    ed1ctllabmid02v:
+control_center:
+  hosts:
+    ed1ctllabmid01v:

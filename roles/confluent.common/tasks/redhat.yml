@@ -1,0 +1,87 @@
+---
+- name: Add Confluent Dist Yum Repo
+  yum_repository:
+    name: Confluent.dist
+    file: confluent
+    description: "Confluent repository (dist)"
+    baseurl: "{{confluent_common_repository_redhat_dist_baseurl}}"
+    gpgcheck: "{{confluent_common_repository_redhat_dist_gpgcheck}}"
+    gpgkey: "{{confluent_common_repository_redhat_dist_gpgkey}}"
+    enabled: "{{confluent_common_repository_redhat_dist_enabled}}"
+  notify: yum-clean-all
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Add Confluent Yum Repo
+  yum_repository:
+    name: Confluent
+    file: confluent
+    description: "Confluent repository"
+    baseurl: "{{confluent_common_repository_redhat_main_baseurl}}"
+    gpgcheck: "{{confluent_common_repository_redhat_main_gpgcheck}}"
+    gpgkey: "{{confluent_common_repository_redhat_main_gpgkey}}"
+    enabled: "{{confluent_common_repository_redhat_main_enabled}}"
+  notify: yum-clean-all
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Add Custom Repo file
+  copy:
+    src: "{{custom_yum_repofile_filepath}}"
+    dest: /etc/yum.repos.d/custom-confluent.repo
+  when: repository_configuration == 'custom'
+
+- meta: flush_handlers
+
+- name: Create directories
+  file: path={{ item }} state=directory owner={{ confluent_user }} group={{ confluent_group }} recurse=yes
+  with_items:
+    - "{{ confluent_jdk }}"
+
+#- name: Download Oracle JDK
+#  unarchive: src={{ confluent_jdk_installer }} dest={{ confluent_jdk }} remote_src=True owner={{ confluent_user }} group={{ confluent_group }}
+#  when: install_java|bool
+
+- name: Check that the  JAVA exists
+  stat:
+    path: "{{ confluent_jdk }}/{{ confluent_jdk_archvie }}"
+  register: stat_java_result
+
+- name: Download de software
+  action: shell wget --no-check-certificate --user {{ confluent_faas_user }} --password '{{ confluent_faas_pass }}' '{{ confluent_jdk_installer }}' -P '{{ confluent_jdk }}/'
+  when:
+    - install_java|bool
+    - not stat_java_result.stat.exists
+
+- name: Extract Oracle JDK
+  unarchive: src={{ confluent_jdk }}/{{ confluent_jdk_archvie }} dest={{ confluent_jdk }} remote_src=false owner={{ confluent_user }} group={{ confluent_group }}
+  when: install_java|bool
+- name: Create Java Link
+  file:
+    src: "{{ confluent_jdk }}/{{ confluent_jdk_version }}"
+    dest: "/opt/java"
+    state: link
+
+
+#- name: Install Java
+#  yum:
+#    name: "{{redhat_java_package_name}}"
+#    state: present
+#  register: java_install_result
+#  until: java_install_result is success
+#  retries: 10
+#  delay: 5
+#  when: install_java|bool
+
+- name: Install OpenSSL and Unzip
+  yum:
+    name: "{{item}}"
+  loop:
+    - openssl
+    - unzip
+    - telnet
+    - mlocate
+    - strace
+    - psmisc

@@ -1,0 +1,38 @@
+### Repository URL
+confluent_common_repository_baseurl: "https://faas.securitasdirect.local/arm/generic/confluent/6.0.0"
+jolokia-jvm_repository_baseurl: "https://faas.securitasdirect.local/arm/remote-repos/org/jolokia/jolokia-jvm/1.6.2"
+jmx_prometheus_repository_baseurl: "https://faas.securitasdirect.local/arm/remote-repos/io/prometheus/jmx/jmx_prometheus_javaagent/0.12.0"
+confluent_jdk_archvie: "jdk-11.0.4_linux-x64_bin.tar.gz"
+
+#### Users UID
+confluent_group_gid: 497
+confluent_user_uid: 663
+confluent_user_passw: 'Temporal123.'
+control_center_user_uid: 664
+control_center_group_gid: 497
+zookeeper_user_uid: 661
+zookeeper_group_gid: 497
+kafka_broker_user_uid: 661
+kafka_broker_group_gid: 497
+kafka_connect_user_uid: 665
+kafka_connect_group_gid: 497
+kafka_rest_user_uid: 659
+kafka_rest_group_gid: 497
+ksql_user_uid: 660
+ksql_group_gid: 497
+schema_registry_user_uid: 662
+schema_registry_group_gid: 497
+
+### Java Heap Options
+CONTROLCENTER_HEAP: "-Xmx1g"
+BROKER_HEAP: "-Xms1g -Xmx2g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
+CONNECT_HEAP: "-Xms256M -Xmx1G"
+REST_HEAP: "-Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
+KSQL_HEAP: "-Xmx1g"
+SCHEMAREGISTRY_HEAP: "-Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20"
+ZOOKEEPER_HEAP: "-Xmx1g"
+
+#### Authentication users
+control_center_users:
+  middleware: Temporal123.,Administrators
+  monitor: Temporal123.,Restricted

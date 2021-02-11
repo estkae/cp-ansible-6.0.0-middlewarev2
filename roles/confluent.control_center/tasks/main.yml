@@ -1,0 +1,257 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
+# Install Packages
+- name: Install the Control Center Packages
+  yum:
+    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    state: latest
+  loop: "{{control_center_packages}}"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+
+- name: Install the Control Center Packages
+  apt:
+    name: "{{item}}{{confluent_package_debian_suffix}}"
+  loop: "{{control_center_packages}}"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+
+# Configure environment
+- name: Create Control Center Group
+  group:
+    name: "{{control_center_group}}"
+    gid: "{{control_center_group_gid}}"
+
+- name: Create Control Center User
+  user:
+    name: "{{control_center_user}}"
+    uid: "{{control_center_user_uid}}"
+    comment: "Control Center User"
+    system: true
+    group: "{{control_center_group}}"
+
+- name: Create profile
+  blockinfile:
+    path: '/home/{{ control_center_user }}/.bash_profile'
+    block: |
+      # User specific environment and startup programs
+      JAVA_HOME={{ confluent_jdk }}/{{ confluent_jdk_version }}
+      JAVA=${JAVA_HOME}/bin/java
+      HOME_CONFLUENT={{archive_destination_path}}/confluent-{{confluent_package_version}}
+      PATH=$HOME_CONFLUENT/bin:/opt/java/bin:$PATH
+      export JAVA_HOME JAVA HOME_CONFLUENT PATH
+  become_user: "{{ control_center_user }}"
+
+- name: update ulimits
+  blockinfile:
+    path: /etc/security/limits.conf
+    marker_begin : "<!-- BEGIN {{control_center_user}} ANSIBLE MANAGED BLOCK -->"
+    marker_end : "<!-- END {{control_center_user}} ANSIBLE MANAGED BLOCK -->"
+    insertafter: EOF
+    block: |
+      {{ control_center_user }} hard core 0
+      {{ control_center_user }} soft nofile 65535
+      {{ control_center_user }} hard nofile 65535
+      {{ control_center_user }} soft nproc 4096
+      {{ control_center_user }} hard nproc 16384
+
+- name: Set Control Center Data Dir permissions
+  file:
+    path: "{{control_center_final_properties['confluent.controlcenter.data.dir']}}"
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    state: directory
+    mode: 0750
+
+- name: Set Control Center Data Dir file permissions
+  file:
+    path: "{{control_center_final_properties['confluent.controlcenter.data.dir']}}"
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    recurse: true
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Control Center Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{control_center.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{control_center.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+
+- include_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{control_center_truststore_storepass}}"
+    truststore_path: "{{control_center_truststore_path}}"
+    keystore_path: "{{control_center_keystore_path}}"
+    keystore_storepass: "{{control_center_keystore_storepass}}"
+    keystore_keypass: "{{control_center_keystore_keypass}}"
+    service_name: control_center
+    user: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{control_center_ca_cert_path}}"
+    cert_path: "{{control_center_cert_path}}"
+    key_path: "{{control_center_key_path}}"
+  when: >
+    control_center_ssl_enabled|bool or
+    kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
+    mds_tls_enabled | bool
+
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{control_center_group}}"
+    kerberos_user: "{{control_center_user}}"
+    kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{control_center_keytab_path}}"
+    kerberos_handler: "restart control center"
+  when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Copy Custom Control Center Files
+  include_tasks: ../../tasks/copy_files.yml
+  vars:
+    copy_files: "{{control_center_copy_files}}"
+    user: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  when: control_center_copy_files | length > 0
+
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
+- name: Create Control Center Config directory
+  file:
+    path: "{{ control_center.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+
+- name: Create Control Center Config
+  template:
+    src: control-center.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  notify: restart control center
+
+- name: Copy authentication files
+  template: src={{ item.file }} dest={{ item.dest }} mode={{ item.mode }} owner={{ control_center_user }} group={{ control_center_group }}
+  with_items:
+     - { file: "authentication.jaas.j2", dest: "{{ archive_destination_path }}/etc/confluent-control-center/authentication.jaas", mode: '0600' }
+     - { file: "password.properties.j2", dest: "{{ archive_destination_path }}/etc/confluent-control-center/password.properties", mode: '0600' }
+  notify: restart control center
+
+- name: Set Permissions on /var/log/confluent
+  file:
+    path: /var/log/confluent/
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    state: directory
+
+- name: Create Logs Directory
+  file:
+    path: "{{control_center.appender_log_path}}"
+    state: directory
+    group: "{{control_center_group}}"
+    owner: "{{control_center_user}}"
+    mode: 0770
+
+- name: Create RocksDB Directory
+  file:
+    path: "{{control_center_rocksdb_path}}"
+    group: "{{control_center_group}}"
+    owner: "{{control_center_user}}"
+    mode: 0750
+    state: directory
+  when: control_center_rocksdb_path != ""
+
+- name: Set Permission to RocksDB Files
+  file:
+    path: "{{control_center_rocksdb_path}}"
+    group: "{{control_center_group}}"
+    owner: "{{control_center_user}}"
+    recurse: true
+  when: control_center_rocksdb_path != ""
+
+- name: Create log4j Directory
+  file:
+    path: "{{control_center.log4j_file | dirname}}"
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    state: directory
+    mode: 0750
+
+- name: Create Control Center log4j Config
+  template:
+    src: control-center_log4j.properties.j2
+    dest: "{{control_center.log4j_file}}"
+    mode: 0640
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  notify: restart control center
+
+- name: Enable Secrets Protection
+  include_tasks: ../../tasks/secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ control_center_secrets_protection_encrypt_passwords }}"
+    properties: "{{ control_center_secrets_protection_encrypt_properties }}"
+    config_path: "{{ control_center.config_file }}"
+  when: control_center_secrets_protection_enabled|bool
+
+- name: Create Service Override Directory
+  file:
+    path: "{{control_center.systemd_override | dirname}}"
+    state: directory
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    mode: 0640
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{control_center.systemd_override}}"
+    mode: 0640
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  notify: restart control center
+
+- name: Certs were Updated - Trigger Restart
+  command: /bin/true
+  notify: restart control center
+  when: certs_updated|bool
+
+- meta: flush_handlers
+
+- name: Start Control Center Service
+  systemd:
+    name: "{{control_center_service_name}}"
+    enabled: true
+    state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - health_checks_enabled|bool
+    - not ansible_check_mode

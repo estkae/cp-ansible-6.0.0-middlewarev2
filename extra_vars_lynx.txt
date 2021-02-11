@@ -1,0 +1,34 @@
+### Repository URL
+confluent_common_repository_baseurl: "http://192.168.8.170:81/confluent"
+
+#### Users UID
+confluent_group_gid: 5000
+confluent_user_uid: 5000
+control_center_user_uid: 5001
+control_center_group_gid: 5000
+zookeeper_user_uid: 5002
+zookeeper_group_gid: 5000
+kafka_broker_user_uid: 5002
+kafka_broker_group_gid: 5000
+kafka_connect_user_uid: 5003
+kafka_connect_group_gid: 5000
+kafka_rest_user_uid: 5004
+kafka_rest_group_gid: 5000
+ksql_user_uid: 5005
+ksql_group_gid: 5000
+schema_registry_user_uid: 5006
+schema_registry_group_gid: 5000
+
+### Java Heap Options
+CONTROLCENTER_HEAP: "-Xmx1g"
+BROKER_HEAP: "-Xms1g -Xmx2g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
+CONNECT_HEAP: "-Xms256M -Xmx1G"
+REST_HEAP: "-Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
+KSQL_HEAP: "-Xmx1g"
+SCHEMAREGISTRY_HEAP: "-Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20"
+ZOOKEEPER_HEAP: "-Xmx1g"
+
+#### Authentication users
+control_center_users:
+  middleware: adminweb01,Administrators
+  monitor: Temporal123.,Restricted

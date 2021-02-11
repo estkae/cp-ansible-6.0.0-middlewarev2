@@ -1,0 +1,257 @@
+---
+- name: Kafka Confluent group
+  group:
+    name: "{{confluent_group}}"
+    gid: "{{confluent_group_gid}}"
+
+- name: Kafka Confluent user
+  user:
+    name: "{{confluent_user}}"
+    uid: "{{confluent_user_uid}}"
+    password: "{{ confluent_user_passw | password_hash('sha512') }}"
+    comment: "Confluent User"
+    system: true
+    group: "{{confluent_group}}"
+
+- name: Allow confluent group to have passwordless sudo
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: '^%wheel'
+    line: '%confluent   ALL=NOPASSWD:/usr/sbin/service, /bin/su - cp-kafka, /bin/su - cp-control-center, /bin/su - cp-control-center,/bin/su - cp-ksql, /bin/su - cp-schema-registry, /bin/su - cp-kafka-connect, /bin/su - cp-kafka-rest'
+
+- name: Confirm Hash Merging Enabled
+  assert:
+    that: lookup('config', 'DEFAULT_HASH_BEHAVIOUR') == 'merge'
+    fail_msg: "Hash Merging must be enabled in ansible.cfg: Confirm current directory is cp-ansible and permissions are set to 755 not 777"
+    quiet: true
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_distribution
+
+# System Tunning
+- include_tasks: systemTuning.yml
+  when: ansible_os_family == "RedHat"
+
+# JVM Installation and Repo Setup
+- include_tasks: redhat.yml
+  when: ansible_os_family == "RedHat"
+
+- include_tasks: ubuntu.yml
+  when: ansible_distribution == "Ubuntu"
+
+- include_tasks: debian.yml
+  when: ansible_distribution == "Debian"
+
+# Process Archive File deployments
+- name: Create Confluent Platform install directory
+  file:
+    path: "{{archive_destination_path}}"
+    state: directory
+    mode: 0775
+    owner:  "{{confluent_user}}"
+    group:  "{{confluent_group}}"
+  when: installation_method == "archive"
+
+- name: Create Confluent Platform extract directory
+  file:
+    path: "{{archive_destination_path}}/confluent-{{confluent_package_version}}"
+    state: directory
+    mode: 0775
+    owner:  "{{confluent_user}}"
+    group:  "{{confluent_group}}"
+  when: installation_method == "archive"
+
+# If the target directory (i.e. creates) doesn't exist then download and expand the remote archive into target
+#- name: Expand remote Confluent Platform archive
+#  unarchive:
+#    src: "{{ confluent_archive_file_source }}"
+#    remote_src: "{{ confluent_archive_file_remote }}"
+#    dest: "{{archive_destination_path}}"
+#    owner:  "{{confluent_user}}"
+#    group:  "{{confluent_group}}"
+#    mode: 0775
+#    creates: "{{archive_destination_path}}/confluent-{{confluent_package_version}}"
+#  when: installation_method == "archive"
+
+
+- name: Check that the  software Confluent
+  stat:
+    path: "{{ archive_destination_path }}/confluent-{{confluent_package_version}}.tar.gz"
+  register: stat_sconfluent_result
+
+- name: Download software Confluent
+  action: shell wget --no-check-certificate '{{ confluent_archive_file_source }}' -P '{{ archive_destination_path }}/'
+  become: yes
+  become_user: "{{ confluent_user }}"
+  when: not stat_sconfluent_result.stat.exists
+
+- name: Extract Confluent Software
+  unarchive: src={{ archive_destination_path }}/confluent-{{confluent_package_version}}.tar.gz dest="{{archive_destination_path}}" owner={{ confluent_user }} group={{ confluent_group }} remote_src="{{ confluent_archive_file_remote }}"
+
+- set_fact:
+    confluent_logs_gc: "{{archive_destination_path}}/confluent-{{confluent_package_version}}/logs"
+
+- name: Create SSL directory certs
+  file:
+    path: "{{ confluent_ssl }}/certs"
+    owner: "{{ confluent_user }}"
+    group:  "{{confluent_group}}"
+    state: directory
+    mode: 0755
+  when: ssl_enabled|bool
+
+
+#- name: Download certs
+#  action: shell wget --no-check-certificate '{{ confluent_archive_certs }}' -P '{{ confluent_ssl }}/certs'
+#  become: yes
+#  become_user: "{{ confluent_user }}"
+#  when: ssl_enabled|bool
+#
+#- name: Extract Confluent Software
+#  unarchive: src="{{ confluent_ssl }}/certs/certs_test.tar" dest="{{ confluent_ssl }}/certs" owner={{ confluent_user }} group={{ confluent_group }} remote_src="{{ confluent_archive_file_remote }}"
+
+- set_fact:
+    confluent_logs_gc: "{{archive_destination_path}}/confluent-{{confluent_package_version}}/logs"
+
+- name: Create JVM logs directory
+  file:
+    path: "{{confluent_logs_gc}}"
+    state: directory
+    owner:  "{{confluent_user}}"
+    group:  "{{confluent_group}}"
+    mode: 0775
+  when: installation_method == "archive"
+
+- name: Create Jolokia directory
+  file:
+    path: /opt/confluent/jolokia
+    owner:  "{{confluent_user}}"
+    group:  "{{confluent_group}}"
+    state: directory
+    mode: 0755
+  when: jolokia_enabled|bool
+
+- name: Create SSL Certificate Directory
+  file:
+    path: "{{ confluent_ssl }}/private"
+    owner:  "{{confluent_user}}"
+    group:  "{{confluent_group}}"
+    state: directory
+    mode: 0755
+  when: ssl_enabled|bool
+
+
+#- name: Download Jolokia Jar
+#  get_url:
+#    url: "{{ jolokia_jar_url }}"
+#    dest: "{{ jolokia_jar_path }}"
+#    owner:  "{{confluent_user}}"
+#    group:  "{{confluent_group}}"
+#    mode: 0755
+#  register: joklokia_download_result
+#  until: joklokia_download_result is success
+#  retries: 5
+#  delay: 5
+#  when:
+#    - jolokia_enabled|bool
+#    - not ansible_check_mode
+
+- name: Check that the Jolokia jar exists
+  stat:
+    path: "{{ jolokia_jar_path }}"
+  register: stat_jolokia_result
+
+- name: Download Jolokia Jar
+  action: shell wget --no-check-certificate --user {{ confluent_faas_user }} --password '{{ confluent_faas_pass }}' '{{ jolokia_jar_url }}' -O '{{ jolokia_jar_path }}'
+  register: joklokia_download_result
+  until: joklokia_download_result is success
+  when:
+    - jolokia_enabled|bool
+    - not ansible_check_mode
+    - not stat_jolokia_result.stat.exists
+
+- name: Create Prometheus install directory
+  file:
+    path: /opt/confluent/prometheus
+    owner:  "{{confluent_user}}"
+    group:  "{{confluent_group}}"
+    state: directory
+    mode: 0755
+  when: jmxexporter_enabled|bool
+
+#- name: Download Prometheus JMX Exporter Jar
+#  get_url:
+#    url: "{{ jmxexporter_jar_url }}"
+#    dest: "{{ jmxexporter_jar_path }}"
+#    mode: 0755
+#    owner:  "{{confluent_user}}"
+#    group:  "{{confluent_group}}"
+#  register: prometheus_download_result
+#  until: prometheus_download_result is success
+#  retries: 5
+#  delay: 5
+#  when:
+#    - jmxexporter_enabled|bool
+#    - not ansible_check_mode
+
+- name: Check that the  Prometheus JMX exists
+  stat:
+    path: "{{ jmxexporter_jar_path }}"
+  register: stat_Prometheus_result
+
+- name: Download Prometheus JMX Exporter Jar
+  action: shell wget --no-check-certificate --user {{ confluent_faas_user }} --password '{{ confluent_faas_pass }}' '{{ jmxexporter_jar_url }}' -O '{{ jmxexporter_jar_path }}'
+  register: prometheus_download_result
+  until: prometheus_download_result is success
+  when:
+    - jmxexporter_enabled|bool
+    - not ansible_check_mode
+    - not stat_Prometheus_result.stat.exists
+
+- name: Download Confluent CLI - Standard
+  shell: "curl -L https://cnfl.io/cli | sh -s -- -b {{ confluent_cli_path | dirname }}"
+  args:
+    creates: "{{ confluent_cli_path }}"
+  register: cli_download_result
+  until: cli_download_result is success
+  retries: 5
+  delay: 5
+  when:
+    - confluent_cli_download_enabled|bool
+    - confluent_cli_custom_download_url is not defined
+
+- name: Download Confluent CLI - Custom URL
+  get_url:
+    url: "{{ confluent_cli_custom_download_url }}"
+    dest: "{{ confluent_cli_path }}"
+    mode: 0755
+  register: cli_download_result
+  until: cli_download_result is success
+  retries: 5
+  delay: 5
+  when:
+    - confluent_cli_download_enabled|bool
+    - confluent_cli_custom_download_url is defined
+
+- set_fact:
+    common_role_completed: true
+
+- name: Create profile
+  blockinfile:
+    path: '/home/{{ confluent_user }}/.bash_profile'
+    block:
+      # User specific environment and startup programs
+      JAVA_HOME={{ confluent_jdk }}/{{ confluent_jdk_version }}
+      JAVA=${JAVA_HOME}/bin/java
+      HOME_CONFLUENT={{archive_destination_path}}/confluent-{{confluent_package_version}}
+      PATH=$HOME_CONFLUENT/bin:/opt/java/bin:$PATH
+      export JAVA_HOME JAVA HOME_CONFLUENT PATH
+  become_user: "{{ confluent_user }}"
