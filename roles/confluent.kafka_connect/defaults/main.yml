@@ -28,6 +28,14 @@ kafka_connect_service_environment_overrides:
   CONFLUENT_SECURITY_MASTER_KEY: "{% if kafka_connect_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
   PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/opt/java/bin"
   LOG_DIR: "{{kafka_connect.appender_log_path}}"
+  KAFKA_JMX_OPTS: "-javaagent:/usr/share/java/kafka/jolokia-jvm-agent.jar=port=8778,host=localhost \
+-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false \
+-Dcom.sun.management.jmxremote.ssl=false \
+-Djava.rmi.server.hostname=localhost \
+-Dcom.sun.management.jmxremote.host=localhost \
+-Dcom.sun.management.jmxremote.port=9999 \
+-Dcom.sun.management.jmxremote.rmi.port=9999 \
+-Djava.net.preferIPv4Stack=true"
 
 kafka_connect:
   appender_log_path: /logs/confluent/kafka/
